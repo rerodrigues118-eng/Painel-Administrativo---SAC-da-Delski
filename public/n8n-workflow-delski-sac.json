@@ -1,0 +1,217 @@
+{
+  "name": "Delski SAC - Recebimento de Chamados",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "delski-sac-recebimento",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook-recebimento",
+      "name": "Webhook Recebimento",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body;\n\nconst nome = (body.nome || '').trim();\nconst email = (body.email || '').trim().toLowerCase();\nconst telefone = (body.telefone || '').replace(/\\D/g, '');\nconst empresa = (body.empresa || '').trim();\nconst protocolo = (body.protocolo || '').trim().toUpperCase();\nconst assunto = (body.assunto || '').trim();\nconst descricao = (body.descricao || '').trim();\nconst categoria = (body.categoria_label || body.categoria || '').trim();\nconst prioridade = (body.prioridade_label || body.prioridade || 'Média').trim();\nconst anexos_urls = body.anexos_urls || [];\n\nreturn {\n  body: {\n    nome, email, telefone, empresa, protocolo,\n    assunto, descricao, categoria, prioridade, anexos_urls\n  }\n};"
+      },
+      "id": "node-normalizar",
+      "name": "Normalizar Dados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 200]
+    },
+    {
+      "parameters": {
+        "model": "gemini-1.5-flash",
+        "messages": {
+          "values": [
+            {
+              "content": "=Você é um assistente de SAC especializado. Analise a mensagem abaixo e responda SOMENTE com JSON válido, sem markdown, no formato exato:\n{\n  \"resumo\": \"resumo executivo em 1 frase\",\n  \"sentimento\": \"Positivo\" ou \"Neutro\" ou \"Negativo\",\n  \"urgencia\": \"Baixa\" ou \"Média\" ou \"Alta\" ou \"Urgente\"\n}\n\nMensagem do cliente:\nAssunto: {{ $json.body.assunto }}\nCategoria: {{ $json.body.categoria }}\nDescrição: {{ $json.body.descricao }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-llm-chain",
+      "name": "Basic LLM Chain",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [440, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawText = $json.text || $json.response || '';\n\nconst jsonMatch = rawText.match(/\\{[\\s\\S]*?\\}/);\nlet parsed = { resumo: null, sentimento: 'Neutro', urgencia: 'Média' };\n\nif (jsonMatch) {\n  try {\n    parsed = JSON.parse(jsonMatch[0]);\n  } catch(e) {\n    // mantém defaults\n  }\n}\n\nconst prev = $('Normalizar Dados').item.json;\n\nreturn {\n  ...prev,\n  ia: {\n    resumo: parsed.resumo || null,\n    sentimento: parsed.sentimento || 'Neutro',\n    urgencia: parsed.urgencia || 'Média'\n  }\n};"
+      },
+      "id": "node-extrair-ia",
+      "name": "Extrair JSON da IA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/clientes",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=representation,resolution=merge-duplicates" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "nome": "={{ $('Normalizar Dados').item.json.body.nome }}",
+          "email": "={{ $('Normalizar Dados').item.json.body.email }}",
+          "telefone": "={{ $('Normalizar Dados').item.json.body.telefone }}",
+          "empresa": "={{ $('Normalizar Dados').item.json.body.empresa }}"
+        }
+      },
+      "id": "node-salvar-cliente",
+      "name": "Salvar Cliente (Upsert)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/chamados",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "protocolo": "={{ $('Normalizar Dados').item.json.body.protocolo }}",
+          "cliente_id": "={{ $('Salvar Cliente (Upsert)').item.json.id }}",
+          "assunto": "={{ $('Normalizar Dados').item.json.body.assunto }}",
+          "mensagem_original": "={{ $('Normalizar Dados').item.json.body.descricao }}",
+          "categoria": "={{ $('Normalizar Dados').item.json.body.categoria }}",
+          "prioridade": "={{ $('Normalizar Dados').item.json.body.prioridade }}",
+          "status": "Aberto",
+          "anexos_urls": "={{ $('Normalizar Dados').item.json.body.anexos_urls }}",
+          "ia_summary": "={{ $('Extrair JSON da IA').item.json.ia.resumo }}",
+          "ia_sentimento": "={{ $('Extrair JSON da IA').item.json.ia.sentimento }}",
+          "ia_urgencia": "={{ $('Extrair JSON da IA').item.json.ia.urgencia }}"
+        }
+      },
+      "id": "node-inserir-chamado",
+      "name": "Inserir Chamado (Supabase)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.brevo.com/v3/smtp/email",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "api-key", "value": "={{ $env.BREVO_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "sender": { "name": "Delski SAC", "email": "delski.contato@gmail.com" },
+          "to": [{ "email": "={{ $('Normalizar Dados').item.json.body.email }}", "name": "={{ $('Normalizar Dados').item.json.body.nome }}" }],
+          "subject": "=✅ Chamado Recebido - Protocolo {{ $('Normalizar Dados').item.json.body.protocolo }}",
+          "htmlContent": "=<div style=\"font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #0a0a0f; border: 1px solid #1e1e2e; border-radius: 16px; overflow: hidden;\"><div style=\"background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 40px 30px; text-align: center; border-bottom: 1px solid #007bff33;\"><img src=\"https://i.imgur.com/placeholder.png\" alt=\"Delski\" style=\"height: 40px; margin-bottom: 16px;\" onerror=\"this.style.display='none'\"><h1 style=\"color: #ffffff; font-size: 22px; margin: 0; font-weight: 700;\">Chamado Aberto com Sucesso</h1><p style=\"color: #8b8faa; margin: 8px 0 0;\">Nossa equipe já recebeu sua solicitação</p></div><div style=\"padding: 30px;\"><p style=\"color: #c0c0d0; font-size: 15px;\">Olá, <strong style=\"color: #fff;\">{{ $('Normalizar Dados').item.json.body.nome }}</strong>!</p><p style=\"color: #8b8faa; font-size: 14px; line-height: 1.6;\">Registramos sua solicitação com sucesso. Guarde o número do protocolo abaixo para acompanhar seu chamado:</p><div style=\"background: #007bff15; border: 1px solid #007bff40; border-radius: 12px; padding: 20px; text-align: center; margin: 24px 0;\"><p style=\"color: #8b8faa; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; margin: 0 0 8px;\">Número do Protocolo</p><p style=\"color: #007bff; font-size: 28px; font-weight: 800; font-family: monospace; letter-spacing: 3px; margin: 0;\">{{ $('Normalizar Dados').item.json.body.protocolo }}</p></div><p style=\"color: #8b8faa; font-size: 14px;\">Assunto: <strong style=\"color: #c0c0d0;\">{{ $('Normalizar Dados').item.json.body.assunto }}</strong></p><div style=\"text-align: center; margin: 32px 0;\"><a href=\"http://localhost:5173/#consultar-protocolo\" style=\"display: inline-block; background: #007bff; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 10px; font-weight: 700; font-size: 15px; letter-spacing: 0.5px;\">🔍 Acompanhar meu Chamado</a></div><div style=\"background: #ff990015; border-left: 4px solid #ff9900; border-radius: 4px; padding: 16px; margin-top: 24px;\"><p style=\"color: #ff9900; margin: 0; font-size: 13px; font-weight: 600;\">⚠️ AVISO IMPORTANTE</p><p style=\"color: #c0a060; margin: 8px 0 0; font-size: 13px; line-height: 1.5;\">Por favor, <strong>NÃO RESPONDA</strong> a este e-mail. Para enviar mensagens, adicionar informações ou acompanhar atualizações, utilize exclusivamente o botão acima ou acesse nosso portal diretamente. Respostas por e-mail não serão processadas.</p></div></div><div style=\"background: #0d0d1a; padding: 20px 30px; border-top: 1px solid #1e1e2e; text-align: center;\"><p style=\"color: #555577; font-size: 12px; margin: 0;\">© 2026 Delski · Todos os direitos reservados</p></div></div>"
+        }
+      },
+      "id": "node-email-confirmacao",
+      "name": "E-mail Confirmação (Cliente)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 80]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.brevo.com/v3/smtp/email",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "api-key", "value": "={{ $env.BREVO_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "sender": { "name": "Sistema Delski", "email": "delski.contato@gmail.com" },
+          "to": [{ "email": "delski.contato@gmail.com" }],
+          "subject": "=🔔 Novo Chamado: {{ $('Normalizar Dados').item.json.body.protocolo }} - {{ $('Normalizar Dados').item.json.body.assunto }}",
+          "htmlContent": "=<div style=\"font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px;\"><h2 style=\"color: #007bff;\">🔔 Novo Chamado Recebido</h2><table style=\"width:100%; border-collapse: collapse; font-size: 14px;\"><tr><td style=\"padding: 8px; color: #888; width: 120px;\">Protocolo:</td><td style=\"padding: 8px; font-weight: bold; color: #333;\">{{ $('Normalizar Dados').item.json.body.protocolo }}</td></tr><tr style=\"background:#f9f9f9;\"><td style=\"padding: 8px; color: #888;\">Cliente:</td><td style=\"padding: 8px; color: #333;\">{{ $('Normalizar Dados').item.json.body.nome }} ({{ $('Normalizar Dados').item.json.body.empresa }})</td></tr><tr><td style=\"padding: 8px; color: #888;\">E-mail:</td><td style=\"padding: 8px; color: #333;\">{{ $('Normalizar Dados').item.json.body.email }}</td></tr><tr style=\"background:#f9f9f9;\"><td style=\"padding: 8px; color: #888;\">Assunto:</td><td style=\"padding: 8px; color: #333;\">{{ $('Normalizar Dados').item.json.body.assunto }}</td></tr><tr><td style=\"padding: 8px; color: #888;\">Categoria:</td><td style=\"padding: 8px; color: #333;\">{{ $('Normalizar Dados').item.json.body.categoria }}</td></tr><tr style=\"background:#f9f9f9;\"><td style=\"padding: 8px; color: #888;\">Análise IA:</td><td style=\"padding: 8px; color: #333;\">{{ $('Extrair JSON da IA').item.json.ia.sentimento }} · {{ $('Extrair JSON da IA').item.json.ia.urgencia }}</td></tr></table><hr style=\"margin: 20px 0; border: 1px solid #eee;\"><p style=\"color: #888; font-size: 13px; font-weight: bold;\">Descrição:</p><p style=\"color: #333; font-size: 13px; line-height: 1.6;\">{{ $('Normalizar Dados').item.json.body.descricao }}</p><a href=\"http://localhost:3000/chamados\" style=\"display:inline-block; margin-top: 16px; background: #007bff; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;\">Abrir no Painel ADM</a></div>"
+        }
+      },
+      "id": "node-email-alerta",
+      "name": "E-mail Alerta (Equipe)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 320]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"success\": true, \"protocolo\": \"{{ $('Normalizar Dados').item.json.body.protocolo }}\" }"
+      },
+      "id": "node-resposta-webhook",
+      "name": "Resposta Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1540, 200]
+    }
+  ],
+  "connections": {
+    "Webhook Recebimento": {
+      "main": [[{ "node": "Normalizar Dados", "type": "main", "index": 0 }]]
+    },
+    "Normalizar Dados": {
+      "main": [[{ "node": "Basic LLM Chain", "type": "main", "index": 0 }]]
+    },
+    "Basic LLM Chain": {
+      "main": [[{ "node": "Extrair JSON da IA", "type": "main", "index": 0 }]]
+    },
+    "Extrair JSON da IA": {
+      "main": [[{ "node": "Salvar Cliente (Upsert)", "type": "main", "index": 0 }]]
+    },
+    "Salvar Cliente (Upsert)": {
+      "main": [[{ "node": "Inserir Chamado (Supabase)", "type": "main", "index": 0 }]]
+    },
+    "Inserir Chamado (Supabase)": {
+      "main": [
+        [
+          { "node": "E-mail Confirmação (Cliente)", "type": "main", "index": 0 },
+          { "node": "E-mail Alerta (Equipe)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "E-mail Confirmação (Cliente)": {
+      "main": [[{ "node": "Resposta Webhook", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
