@@ -4,6 +4,8 @@ import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabase";
 
+export const dynamic = 'force-dynamic';
+
 export default async function ClientesPage() {
   // Buscar os dados da tabela clientes reais, com contagem de chamados e ultima iteracao
   const { data: clientesData, error } = await supabase

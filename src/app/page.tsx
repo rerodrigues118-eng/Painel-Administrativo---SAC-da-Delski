@@ -1,6 +1,8 @@
 import { supabase } from "@/lib/supabase";
 import DashboardClient from "./DashboardClient";
 
+export const dynamic = 'force-dynamic';
+
 export default async function DashboardPage() {
   const { data: initialChamados } = await supabase
     .from('chamados')

@@ -1,6 +1,8 @@
 import { supabase } from "@/lib/supabase";
 import RelatoriosClient from "./RelatoriosClient";
 
+export const dynamic = 'force-dynamic';
+
 export default async function RelatoriosPage() {
   const { data: chamados } = await supabase
     .from('chamados')
