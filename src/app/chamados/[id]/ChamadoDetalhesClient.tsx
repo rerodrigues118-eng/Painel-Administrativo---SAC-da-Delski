@@ -80,7 +80,7 @@ export default function ChamadoDetalhesClient({
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   // ⚙️ URLs dos Webhooks do n8n
-  const N8N_WEBHOOK_RESPOSTA  = process.env.NEXT_PUBLIC_N8N_WEBHOOK_RESPOSTA  || 'https://n8n.srv1695139.hstgr.cloud/webhook-test/resposta-cliente';
+  const N8N_WEBHOOK_RESPOSTA  = process.env.NEXT_PUBLIC_N8N_WEBHOOK_RESPOSTA  || 'https://n8n.srv1695139.hstgr.cloud/webhook/resposta-cliente';
   const N8N_WEBHOOK_STATUS    = process.env.NEXT_PUBLIC_N8N_WEBHOOK_STATUS    || 'https://n8n.srv1695139.hstgr.cloud/webhook-test/status-chamado';
 
   // States para Edição de Cliente
