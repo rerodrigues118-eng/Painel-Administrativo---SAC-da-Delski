@@ -167,7 +167,7 @@ export function Topbar() {
 
         <div className="flex items-center gap-4 pl-6 border-l border-white/10">
           <div className="text-right hidden md:block">
-            <p className="text-sm font-semibold text-foreground">Maria Rodrigues</p>
+            <p className="text-sm font-semibold text-foreground">Equipe Delski</p>
             <p className="text-xs text-primary">Administrador</p>
           </div>
           <UserCircle size={40} className="text-primary/80" />

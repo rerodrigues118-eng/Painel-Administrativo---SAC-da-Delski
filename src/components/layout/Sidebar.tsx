@@ -186,7 +186,7 @@ export function Sidebar() {
         <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-white/[0.03] border border-white/5">
           <UserCircle size={32} className="text-primary/80 shrink-0" />
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-foreground truncate">Maria Rodrigues</p>
+            <p className="text-sm font-semibold text-foreground truncate">Equipe Delski</p>
             <p className="text-xs text-primary">Administrador</p>
           </div>
         </div>
