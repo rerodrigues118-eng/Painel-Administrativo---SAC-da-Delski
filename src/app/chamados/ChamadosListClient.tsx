@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +32,18 @@ const STATUS_COLUMNS = ['Aberto', 'Em Análise', 'Em Andamento', 'Resolvido', 'F
 
 export default function ChamadosListClient({ chamados }: { chamados: Chamado[] }) {
   const [viewMode, setViewMode] = useState<'list' | 'kanban' | 'cards'>('list');
+
+  useEffect(() => {
+    const savedMode = localStorage.getItem('delski_sac_view_mode') as 'list' | 'kanban' | 'cards';
+    if (savedMode) {
+      setViewMode(savedMode);
+    }
+  }, []);
+
+  const handleViewModeChange = (mode: 'list' | 'kanban' | 'cards') => {
+    setViewMode(mode);
+    localStorage.setItem('delski_sac_view_mode', mode);
+  };
   const [localChamados, setLocalChamados] = useState<Chamado[]>(chamados);
   const [selectedChamadoId, setSelectedChamadoId] = useState<string | null>(chamados.length > 0 ? chamados[0].id : null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -255,19 +267,19 @@ export default function ChamadosListClient({ chamados }: { chamados: Chamado[] }
 
         <div className="flex items-center bg-background border border-white/10 rounded-lg p-1">
           <button
-            onClick={() => setViewMode('list')}
+            onClick={() => handleViewModeChange('list')}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'list' ? 'bg-primary/20 text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-white/5'}`}
           >
             <List size={16} /> Lista
           </button>
           <button
-            onClick={() => setViewMode('kanban')}
+            onClick={() => handleViewModeChange('kanban')}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'kanban' ? 'bg-primary/20 text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-white/5'}`}
           >
             <Columns size={16} /> Kanban
           </button>
           <button
-            onClick={() => setViewMode('cards')}
+            onClick={() => handleViewModeChange('cards')}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'cards' ? 'bg-primary/20 text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-white/5'}`}
           >
             <LayoutGrid size={16} /> Cards
